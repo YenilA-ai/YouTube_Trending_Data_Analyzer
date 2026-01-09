@@ -137,3 +137,158 @@ def bar_engagement_top_videos(rows):
     plt.tight_layout()
     plt.show()
 
+def dashboard_filter_metric(rows):
+    best = {}
+    for r in rows:
+        vid = r.get("video_id")
+        if not vid:
+            continue
+        v = r.get("views", 0)
+        if vid not in best or v > best[vid].get("views", 0):
+            best[vid] = r
+    base = list(best.values())
+
+    cats = sorted({r.get("category_id") for r in base}, key=lambda x: str(x))
+    chans = sorted({r.get("channel_title") for r in base if r.get("channel_title")}, key=lambda x: x.lower())
+
+    win = tk.Toplevel()
+    win.title("Dashboard")
+    win.geometry("980x620")
+
+    top = ttk.Frame(win, padding=10)
+    top.pack(fill="x")
+
+    ttk.Label(top, text="Category").grid(row=0, column=0, sticky="w")
+    catv = tk.StringVar(value="All")
+    catcb = ttk.Combobox(top, textvariable=catv, state="readonly", values=["All"] + [str(c) for c in cats], width=16)
+    catcb.grid(row=0, column=1, padx=(6, 16), sticky="w")
+
+    ttk.Label(top, text="Channel").grid(row=0, column=2, sticky="w")
+    chv = tk.StringVar(value="All")
+    chcb = ttk.Combobox(top, textvariable=chv, state="readonly", values=["All"] + chans, width=34)
+    chcb.grid(row=0, column=3, padx=(6, 16), sticky="w")
+
+    ttk.Label(top, text="Metric").grid(row=0, column=4, sticky="w")
+    mv = tk.StringVar(value="likes")
+    mcb = ttk.Combobox(top, textvariable=mv, state="readonly", values=["likes", "dislikes", "comment_count"], width=18)
+    mcb.grid(row=0, column=5, padx=(6, 0), sticky="w")
+
+    fig = plt.Figure(figsize=(8.6, 5.4))
+    ax = fig.add_subplot(111)
+    canvas = FigureCanvasTkAgg(fig, master=win)
+    canvas.get_tk_widget().pack(fill="both", expand=True, padx=10, pady=(0, 10))
+
+    def filt():
+        r = base
+        if catv.get() != "All":
+            r = [x for x in r if str(x.get("category_id")) == catv.get()]
+        if chv.get() != "All":
+            r = [x for x in r if (x.get("channel_title") or "") == chv.get()]
+        return r
+
+    def draw(*_):
+        r = filt()
+        xs = [x.get("views", 0) for x in r]
+        m = mv.get()
+        ys = [x.get(m, 0) for x in r]
+
+        ax.clear()
+        ax.set_title("Views vs Selected Metric")
+        ax.set_xlabel("Views")
+        ax.set_ylabel(m)
+        if xs and ys:
+            ax.scatter(xs, ys)
+        canvas.draw_idle()
+
+    catcb.bind("<<ComboboxSelected>>", draw)
+    chcb.bind("<<ComboboxSelected>>", draw)
+    mcb.bind("<<ComboboxSelected>>", draw)
+
+    draw()
+    win.grab_set()
+
+
+def anomaly_overlay(rows):
+    best = {}
+    for r in rows:
+        vid = r.get("video_id")
+        if not vid:
+            continue
+        v = r.get("views", 0)
+        if vid not in best or v > best[vid].get("views", 0):
+            best[vid] = r
+    base = list(best.values())
+
+    by_cat = defaultdict(list)
+    for r in base:
+        by_cat[r.get("category_id")].append(r)
+
+    avg_views = {}
+    for cid, lst in by_cat.items():
+        s = 0
+        n = 0
+        for r in lst:
+            s += r.get("views", 0)
+            n += 1
+        avg_views[cid] = (s / n) if n else 0
+
+    xs = []
+    ys = []
+    axx = []
+    axy = []
+
+    for r in base:
+        views = r.get("views", 0)
+        likes = r.get("likes", 0)
+        dislikes = r.get("dislikes", 0)
+
+        xs.append(views)
+        ys.append(likes)
+
+        cid = r.get("category_id")
+        spike = avg_views.get(cid, 0) > 0 and views >= avg_views[cid] * 3
+
+        ratio = False
+        if dislikes == 0:
+            ratio = likes >= 10000
+        else:
+            ratio = (likes / dislikes) >= 50
+
+        if spike or ratio:
+            axx.append(views)
+            axy.append(likes)
+
+    plt.figure()
+    plt.title("Anomaly Overlay (View Spike OR High Like/Dislike Ratio)")
+    plt.scatter(xs, ys, label="All")
+    if axx:
+        plt.scatter(axx, axy, label="Anomalies")
+    plt.xlabel("Views")
+    plt.ylabel("Likes")
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
+
+
+def tag_frequency_chart(rows):
+    c = Counter()
+    for r in rows:
+        tags = (r.get("tags") or "").strip()
+        if not tags or tags == "[none]":
+            continue
+        for t in tags.replace("|", " ").split():
+            k = t.strip().lower()
+            if len(k) > 2:
+                c[k] += 1
+
+    common = c.most_common(25)
+    words = [w for w, _ in common]
+    freq = [n for _, n in common]
+
+    plt.figure()
+    plt.title("Top Tag Keywords")
+    plt.bar(words, freq)
+    plt.xticks(rotation=60, ha="right")
+    plt.ylabel("Frequency")
+    plt.tight_layout()
+    plt.show()
