@@ -122,7 +122,6 @@ def ratio_outliers(rows, threshold):
     return out
 
 
-
 def recommend_similar(rows, query, k):
     base = _find_one(rows, query)
     if not base:

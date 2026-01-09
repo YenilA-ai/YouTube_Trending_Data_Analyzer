@@ -45,6 +45,7 @@ def histograms_basic(rows):
     plt.ylabel("Count")
     plt.show()
 
+
 def line_duration_by_category_over_time(rows):
     dates_by_vid = defaultdict(set)
     cat_by_vid = {}
@@ -136,6 +137,7 @@ def bar_engagement_top_videos(rows):
     plt.legend()
     plt.tight_layout()
     plt.show()
+
 
 def dashboard_filter_metric(rows):
     best = {}
