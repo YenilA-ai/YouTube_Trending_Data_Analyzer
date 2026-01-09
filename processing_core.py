@@ -120,3 +120,174 @@ def ratio_outliers(rows, threshold):
                 "ratio": ratio,
             })
     return out
+
+
+
+def recommend_similar(rows, query, k):
+    base = _find_one(rows, query)
+    if not base:
+        return []
+
+    base_vid = base.get("video_id")
+    base_cat = base.get("category_id")
+    base_tags = _tags(base.get("tags"))
+
+    best = {}
+    for r in rows:
+        vid = r.get("video_id")
+        if not vid or vid == base_vid:
+            continue
+        if vid not in best:
+            best[vid] = r
+
+    scored = []
+    for vid, r in best.items():
+        score = 0
+        if r.get("category_id") == base_cat:
+            score += 6
+        score += len(base_tags.intersection(_tags(r.get("tags"))))
+        if r.get("channel_title") == base.get("channel_title"):
+            score += 1
+        scored.append((score, r))
+
+    scored.sort(key=lambda x: x[0], reverse=True)
+
+    out = []
+    for i in range(min(int(k), len(scored))):
+        r = scored[i][1]
+        out.append({
+            "video_id": r.get("video_id"),
+            "title": r.get("title"),
+            "channel_title": r.get("channel_title"),
+            "category_id": r.get("category_id"),
+            "views": r.get("views", 0),
+        })
+    return out
+
+
+def tag_keyword_rank(rows, n):
+    c = Counter()
+    for r in rows:
+        for t in _tags(r.get("tags")):
+            if len(t) > 2:
+                c[t] += 1
+    return c.most_common(int(n))
+
+
+def anomaly_scan(rows):
+    best = _best_per_video(rows)
+
+    by_cat = defaultdict(list)
+    for r in best:
+        by_cat[r.get("category_id")].append(r)
+
+    avg_like = {}
+    avg_comm = {}
+    for cid, lst in by_cat.items():
+        ls = 0
+        cs = 0
+        n = 0
+        for r in lst:
+            ls += r.get("likes", 0)
+            cs += r.get("comment_count", 0)
+            n += 1
+        avg_like[cid] = (ls // n) if n else 0
+        avg_comm[cid] = (cs // n) if n else 0
+
+    out = []
+    for r in best:
+        cid = r.get("category_id")
+        likes = r.get("likes", 0)
+        comm = r.get("comment_count", 0)
+        if likes >= max(1, avg_like.get(cid, 0) * 3) and comm <= max(0, avg_comm.get(cid, 0) // 3):
+            out.append({
+                "video_id": r.get("video_id"),
+                "title": r.get("title"),
+                "category_id": cid,
+                "likes": likes,
+                "comment_count": comm,
+                "category_avg_likes": avg_like.get(cid, 0),
+                "category_avg_comments": avg_comm.get(cid, 0),
+            })
+    return out
+
+
+def estimate_trending_days(rows, query):
+    base = _find_one(rows, query)
+    if not base:
+        return {"predicted_days": 0}
+
+    durations = trending_days_by_video(rows)
+    cat = base.get("category_id")
+
+    total = 0
+    cnt = 0
+    for r in rows:
+        if r.get("category_id") == cat:
+            d = durations.get(r.get("video_id"))
+            if d:
+                total += d
+                cnt += 1
+
+    base_avg = (total // cnt) if cnt else 1
+
+    views = base.get("views", 0)
+    likes = base.get("likes", 0)
+    comm = base.get("comment_count", 0)
+
+    bump = 0
+    if views >= 1_000_000 or likes >= 50_000 or comm >= 5_000:
+        bump += 2
+    elif views >= 300_000 or likes >= 15_000 or comm >= 1_500:
+        bump += 1
+
+    pub = base.get("publish_time")
+    hour = getattr(pub, "hour", None)
+    if hour is not None:
+        if 16 <= hour <= 22:
+            bump += 1
+        if 0 <= hour <= 6:
+            bump -= 1
+
+    pred = base_avg + bump
+    if pred < 1:
+        pred = 1
+
+    return {
+        "predicted_days": pred,
+        "category_avg_days": base_avg,
+        "adjustment": bump,
+    }
+
+
+def _find_one(rows, query):
+    q = str(query).lower()
+    for r in rows:
+        if str(r.get("video_id", "")).lower() == q or q in str(r.get("title", "")).lower():
+            return r
+    return None
+
+
+def _tags(s):
+    s = (s or "").strip()
+    if not s or s == "[none]":
+        return set()
+    parts = s.replace("|", " ").split()
+    out = set()
+    for p in parts:
+        t = p.strip().lower()
+        if t:
+            out.add(t)
+    return out
+
+
+def _best_per_video(rows):
+    best = {}
+    for r in rows:
+        vid = r.get("video_id")
+        if not vid:
+            continue
+        v = r.get("views", 0)
+        if vid not in best or v > best[vid].get("views", 0):
+            best[vid] = r
+    return list(best.values())
