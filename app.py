@@ -359,3 +359,274 @@ class App(tk.Tk):
         if not self._need_data():
             return
         self._out(_pretty(proc.trending_days_by_video(self.store.rows)))
+
+        def _p_outliers(self):
+            if not self._need_data():
+                return
+            t = _ask_text(self, "Threshold", "Enter like/dislike ratio threshold (e.g., 30):")
+            if t is None:
+                return
+            try:
+                t = float(t)
+            except Exception:
+                messagebox.showerror("Invalid", "Enter a number")
+                return
+            self._out(_pretty(proc.ratio_outliers(self.store.rows, t)))
+
+        def _p_reco(self):
+            if not self._need_data():
+                return
+            q = _ask_text(self, "Recommend", "Enter video_id or part of title:")
+            if q is None:
+                return
+            k = _ask_text(self, "How many", "Enter number of recommendations:")
+            if k is None:
+                return
+            try:
+                k = int(k)
+            except Exception:
+                messagebox.showerror("Invalid", "Enter an integer")
+                return
+            self._out(_pretty(proc.recommend_similar(self.store.rows, q, k)))
+
+        def _p_tags(self):
+            if not self._need_data():
+                return
+            n = _ask_text(self, "Top N", "Enter N for top keywords:")
+            if n is None:
+                return
+            try:
+                n = int(n)
+            except Exception:
+                messagebox.showerror("Invalid", "Enter an integer")
+                return
+            self._out(_pretty(proc.tag_keyword_rank(self.store.rows, n)))
+
+        def _p_anom(self):
+            if not self._need_data():
+                return
+            self._out(_pretty(proc.anomaly_scan(self.store.rows)))
+
+        def _p_pred(self):
+            if not self._need_data():
+                return
+            q = _ask_text(self, "Predict", "Enter video_id or part of title:")
+            if q is None:
+                return
+            self._out(_pretty(proc.estimate_trending_days(self.store.rows, q)))
+
+        def _v_pie(self):
+            if not self._need_data():
+                return
+            charts.pie_categories(self.store.rows)
+
+        def _v_hist(self):
+            if not self._need_data():
+                return
+            charts.histograms_basic(self.store.rows)
+
+        def _v_line(self):
+            if not self._need_data():
+                return
+            charts.line_duration_by_category_over_time(self.store.rows)
+
+        def _v_bar(self):
+            if not self._need_data():
+                return
+            charts.bar_engagement_top_videos(self.store.rows)
+
+        def _v_dash(self):
+            if not self._need_data():
+                return
+            charts.dashboard_filter_metric(self.store.rows)
+
+        def _v_overlay(self):
+            if not self._need_data():
+                return
+            charts.anomaly_overlay(self.store.rows)
+
+        def _v_tags(self):
+            if not self._need_data():
+                return
+            charts.tag_frequency_chart(self.store.rows)
+
+        def _e_search_json(self):
+            if not self._need_data():
+                return
+            q = _ask_text(self, "Export", "Enter video_id or part of title:")
+            if q is None:
+                return
+            p = exp.export_search_json(self.store.rows, q)
+            self._out(f"Saved: {p}")
+
+        def _e_top10(self):
+            if not self._need_data():
+                return
+            fmt = _ask_choice(self, "Format", "Select format:", ["csv", "json"])
+            if fmt is None:
+                return
+            metric = _ask_choice(self, "Metric", "Select metric:", ["views", "likes", "comment_count"])
+            if metric is None:
+                return
+            p = exp.export_top10(self.store.rows, metric, fmt)
+            self._out(f"Saved: {p}")
+
+        def _e_firstn(self):
+            if not self._need_data():
+                return
+            n = _ask_text(self, "Rows", "Export first N rows:")
+            if n is None:
+                return
+            try:
+                n = int(n)
+            except Exception:
+                messagebox.showerror("Invalid", "Enter an integer")
+                return
+            p = exp.export_first_n(self.store.rows, n)
+            self._out(f"Saved: {p}")
+
+        def _e_catavg(self):
+            if not self._need_data():
+                return
+            p = exp.export_category_averages(self.store.rows)
+            self._out(f"Saved: {p}")
+
+        def _e_filter(self):
+            if not self._need_data():
+                return
+            mode = _ask_choice(self, "Filter", "Filter by:", ["category_id", "channel_title", "trending_date_range"])
+            if mode is None:
+                return
+            filt = {"mode": mode}
+            if mode == "category_id":
+                v = _ask_text(self, "Category", "Enter category_id:")
+                if v is None:
+                    return
+                try:
+                    filt["category_id"] = int(v)
+                except Exception:
+                    messagebox.showerror("Invalid", "Enter an integer")
+                    return
+            elif mode == "channel_title":
+                v = _ask_text(self, "Channel", "Enter exact channel_title:")
+                if v is None:
+                    return
+                filt["channel_title"] = v
+            else:
+                a = _ask_text(self, "Start", "Start date (YYYY-MM-DD):")
+                if a is None:
+                    return
+                b = _ask_text(self, "End", "End date (YYYY-MM-DD):")
+                if b is None:
+                    return
+                filt["start"] = a
+                filt["end"] = b
+            p = exp.export_filtered_csv(self.store.rows, filt)
+            self._out(f"Saved: {p}")
+
+        def _e_reco(self):
+            if not self._need_data():
+                return
+            q = _ask_text(self, "Recommend Export", "Enter video_id or part of title:")
+            if q is None:
+                return
+            k = _ask_text(self, "How many", "Enter number of recommendations:")
+            if k is None:
+                return
+            try:
+                k = int(k)
+            except Exception:
+                messagebox.showerror("Invalid", "Enter an integer")
+                return
+            p = exp.export_recommendations(self.store.rows, q, k)
+            self._out(f"Saved: {p}")
+
+        def _e_anom(self):
+            if not self._need_data():
+                return
+            p = exp.export_anomalies(self.store.rows)
+            self._out(f"Saved: {p}")
+
+    def _pretty(x):
+        try:
+            return json.dumps(x, indent=2, default=str, ensure_ascii=False)
+        except Exception:
+            return str(x)
+
+    def _ask_text(root, title, prompt):
+        top = tk.Toplevel(root)
+        top.title(title)
+        top.transient(root)
+        top.grab_set()
+        top.resizable(False, False)
+
+        v = {"val": None}
+
+        frm = ttk.Frame(top, padding=12)
+        frm.grid(row=0, column=0, sticky="nsew")
+        ttk.Label(frm, text=prompt).grid(row=0, column=0, sticky="w")
+        sv = tk.StringVar()
+        e = ttk.Entry(frm, textvariable=sv, width=52)
+        e.grid(row=1, column=0, sticky="ew", pady=(6, 10))
+        e.focus_set()
+
+        btn = ttk.Frame(frm)
+        btn.grid(row=2, column=0, sticky="e")
+
+        def ok():
+            v["val"] = sv.get().strip()
+            top.destroy()
+
+        def cancel():
+            v["val"] = None
+            top.destroy()
+
+        ttk.Button(btn, text="OK", command=ok).grid(row=0, column=0, padx=(0, 8))
+        ttk.Button(btn, text="Cancel", command=cancel).grid(row=0, column=1)
+
+        top.bind("<Return>", lambda _e: ok())
+        top.bind("<Escape>", lambda _e: cancel())
+
+        root.wait_window(top)
+        return v["val"]
+
+    def _ask_choice(root, title, prompt, options):
+        top = tk.Toplevel(root)
+        top.title(title)
+        top.transient(root)
+        top.grab_set()
+        top.resizable(False, False)
+
+        v = {"val": None}
+
+        frm = ttk.Frame(top, padding=12)
+        frm.grid(row=0, column=0, sticky="nsew")
+        ttk.Label(frm, text=prompt).grid(row=0, column=0, sticky="w")
+
+        choice = tk.StringVar(value=options[0] if options else "")
+        cb = ttk.Combobox(frm, textvariable=choice, state="readonly", values=options, width=50)
+        cb.grid(row=1, column=0, sticky="ew", pady=(6, 10))
+        cb.focus_set()
+
+        btn = ttk.Frame(frm)
+        btn.grid(row=2, column=0, sticky="e")
+
+        def ok():
+            v["val"] = choice.get()
+            top.destroy()
+
+        def cancel():
+            v["val"] = None
+            top.destroy()
+
+        ttk.Button(btn, text="OK", command=ok).grid(row=0, column=0, padx=(0, 8))
+        ttk.Button(btn, text="Cancel", command=cancel).grid(row=0, column=1)
+
+        top.bind("<Return>", lambda _e: ok())
+        top.bind("<Escape>", lambda _e: cancel())
+
+        root.wait_window(top)
+        return v["val"]
+
+    if __name__ == "__main__":
+        App().mainloop()
